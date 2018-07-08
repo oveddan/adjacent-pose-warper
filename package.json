@@ -5,10 +5,16 @@
   "license": "MIT",
   "dependencies": {
     "@tensorflow-models/posenet": "^0.1.2",
-    "@tensorflow/tfjs": "^0.12.0",
-    "parcel-bundler": "^1.9.4"
+    "@tensorflow/tfjs": "^0.11.4",
+    "parcel-bundler": "^1.9.4",
+    "regl": "^1.3.7"
   },
   "devDependencies": {
+    "glslify-bundle": "^5.0.0",
+    "glslify-deps": "^1.3.1",
     "typescript": "^2.9.2"
+  },
+  "scripts": {
+    "watch": "NODE_ENV=development parcel index.html"
   }
 }
