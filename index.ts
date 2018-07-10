@@ -6,6 +6,7 @@ import REGL from 'regl'
 interface DrawProps {
   video: REGL.Texture2D;
   posesTexture: REGL.Texture2D;
+  buffer: REGL.Framebuffer;
 }
 
 interface DrawUniforms {
@@ -19,20 +20,18 @@ interface DrawAttributes {
   position: number[];
 }
 
-interface DrawLineProps {
-  texture: REGL.Texture2D,
+interface FeedbackProps {
+  frame: REGL.Texture2D;
+  previousFrame: REGL.Texture2D;
+  buffer: REGL.Framebuffer;
 }
 
-interface DrawLineUniforms {
-  uStart: REGL.Vec2,
-  uEnd: REGL.Vec2,
-  uColor: REGL.Vec3
-}
+interface FeedbackUniforms {
+  uFrame: REGL.Texture2D,
+  uPreviousFrame: REGL.Texture2D,
+  time: number;
+};
 
-interface DrawLineAttributes {
-  position: number[];
-  texcoord: number[];
-}
 
 function createPoseCanvas(width: number, height: number): HTMLCanvasElement {
   const posesCanvas = document.createElement('canvas');
@@ -55,7 +54,7 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
 
   const regl = REGL();
 
-  const drawPosesOnVideo = regl<DrawUniforms, DrawAttributes, DrawProps>({
+  const capturePosesFromVideo = regl<DrawUniforms, DrawAttributes, DrawProps>({
     frag: require('./src/posesOnVideo.frag'),
     vert: require('./src/posesOnVideo.vert'),
     attributes: {
@@ -73,8 +72,27 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
   
       time: regl.context('time')
     },
-    count: 3
+    count: 3,
+    framebuffer: regl.prop<DrawProps, 'buffer'>('buffer')
   });
+
+  const drawFeeedback = regl<FeedbackUniforms, DrawAttributes, FeedbackProps>({
+    frag: require('./src/feedback.frag'),
+    vert: require('./src/posesOnVideo.vert'),
+    attributes: {
+      position: [
+        -2, 0,
+        0, -2,
+        2, 2]
+    },
+    uniforms: {
+      uFrame: regl.prop<FeedbackProps, 'frame'>('frame'),
+      uPreviousFrame: regl.prop<FeedbackProps, 'previousFrame'>('previousFrame'),
+      time: regl.context('time')
+    },
+    framebuffer: regl.prop<FeedbackProps, 'buffer'>('buffer'),
+    count: 3
+  })
 
   const videoTexture = regl.texture(video);
 
@@ -105,12 +123,23 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
 
   poseEstimationFrame();
 
+  const poseVideoFBO = regl.framebuffer({
+    width: canvas.width,
+    height: canvas.height
+  })
+
+  const feedbackFBO = regl.framebuffer({
+    width: canvas.width,
+    height: canvas.height
+  })
+
   regl.frame(() => {
     regl.clear({
       color: [0, 0, 0, 1]
     })
 
-    drawPosesOnVideo({ video: videoTexture.subimage(video), posesTexture })
+    capturePosesFromVideo({ video: videoTexture.subimage(video), posesTexture, buffer: poseVideoFBO })
+
   })
 }
 

@@ -4,7 +4,7 @@ const minPoseConfidence = 0.1;
 const minPartConfidence = 0.1;
 
 
-const lineWidth = 3;
+const lineWidth = 10;
 
 function toTuple({y, x}: { x: number, y: number }): number[] {
   return [y, x];

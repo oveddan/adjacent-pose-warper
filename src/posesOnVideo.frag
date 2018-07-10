@@ -11,8 +11,10 @@ void main () {
   vec4 color = texture2D(uVideo, vTexcoord);
   vec4 posesStrength = texture2D(uPoses, vTexcoord);
 
-  color *= 1.-step(0.5, posesStrength.a);
+  color *= step(0.5, posesStrength.a);
 
+
+// color = vec4(posesStrength.a);
   // // color = vec4(poseStrength);
   // color = posesStrength;
 
