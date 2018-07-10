@@ -1,20 +1,51 @@
 import { isMobile, loadVideo } from './camera'
 import * as posenet from '@tensorflow-models/posenet'
+import { renderPosesOnCanvas } from './src/util'
 import REGL from 'regl' 
 
-interface Props {
+interface DrawProps {
   video: REGL.Texture2D;
+  posesTexture: REGL.Texture2D;
 }
 
-interface Uniforms {
-  texture: REGL.Texture2D;
+interface DrawUniforms {
+  uVideo: REGL.Texture2D;
+  uPoses: REGL.Texture2D;
   screenShape: REGL.Vec2;
   time: number;
 }
 
-interface Attributes {
+interface DrawAttributes {
   position: number[];
 }
+
+interface DrawLineProps {
+  texture: REGL.Texture2D,
+}
+
+interface DrawLineUniforms {
+  uStart: REGL.Vec2,
+  uEnd: REGL.Vec2,
+  uColor: REGL.Vec3
+}
+
+interface DrawLineAttributes {
+  position: number[];
+  texcoord: number[];
+}
+
+function createPoseCanvas(width: number, height: number): HTMLCanvasElement {
+  const posesCanvas = document.createElement('canvas');
+  posesCanvas.setAttribute('style', 'display: none');
+  posesCanvas.width = width;
+  posesCanvas.height = height;
+
+  document.body.appendChild(posesCanvas);
+
+  return posesCanvas;
+}
+
+
 
 function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
   // const canvas = document.getElementById('output') as HTMLCanvasElement;
@@ -22,14 +53,11 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
   // since images are being fed from a webcam
   const flipHorizontal = true;
 
-  // canvas.width = videoWidth;
-  // canvas.height = videoHeight;
-
   const regl = REGL();
 
-  const drawPoses = regl<Uniforms, Attributes, Props>({
-    frag: require('./src/poses.frag'),
-    vert: require('./src/poses.vert'),
+  const drawPosesOnVideo = regl<DrawUniforms, DrawAttributes, DrawProps>({
+    frag: require('./src/posesOnVideo.frag'),
+    vert: require('./src/posesOnVideo.vert'),
     attributes: {
       position: [
         -2, 0,
@@ -37,25 +65,52 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
         2, 2]
     },
     uniforms: {
-      texture: regl.prop<Props, 'video'>('video'),
-  
+      uVideo: regl.prop<DrawProps, 'video'>('video'),
+      uPoses: regl.prop<DrawProps,  'posesTexture'>('posesTexture'),
+
       screenShape: ({viewportWidth, viewportHeight}) =>
         [viewportWidth, viewportHeight],
   
       time: regl.context('time')
     },
     count: 3
-
   });
 
   const videoTexture = regl.texture(video);
+
+  const canvas = document.getElementsByTagName('canvas')[0]
+
+  const posesCanvas = createPoseCanvas(canvas.width, canvas.height);
+
+  const posesTexture = regl.texture(posesCanvas);
+
+  window.addEventListener('resize', () => {
+    const updatedCanvas = document.getElementsByTagName('canvas')[0]
+    posesCanvas.width = updatedCanvas.width
+    posesCanvas.height = updatedCanvas.height
+  })
+
+  async function poseEstimationFrame() {
+    const poses = await net.estimateMultiplePoses(video);
+
+    const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
+
+    renderPosesOnCanvas(poses, posesCanvas, scale);
+
+    // update texture with contents from canvas
+    posesTexture(posesCanvas);
+
+    requestAnimationFrame(poseEstimationFrame);
+  }
+
+  poseEstimationFrame();
 
   regl.frame(() => {
     regl.clear({
       color: [0, 0, 0, 1]
     })
 
-    drawPoses({ video: videoTexture.subimage(video) })
+    drawPosesOnVideo({ video: videoTexture.subimage(video), posesTexture })
   })
 }
 
