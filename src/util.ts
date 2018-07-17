@@ -19,7 +19,7 @@ function drawSegment([ay, ax]: number[], [by, bx]: number[], [sh, sw]: number[],
   ctx.stroke();
 }
 
-const white = '#000000'
+const white = '#ff0000'
 
 function drawSkeleton(keypoints: posenet.Keypoint[], minConfidence: number, ctx: CanvasRenderingContext2D, scale: [number, number]) {
   const adjacentKeyPoints = posenet.getAdjacentKeyPoints(

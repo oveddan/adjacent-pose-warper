@@ -3,17 +3,26 @@ import * as posenet from '@tensorflow-models/posenet'
 import { renderPosesOnCanvas } from './src/util'
 import REGL from 'regl' 
 
-interface DrawProps {
+interface DrawPosesProps {
   video: REGL.Texture2D;
-  posesTexture: REGL.Texture2D;
+  posesFeedback: REGL.Framebuffer;
   buffer: REGL.Framebuffer;
 }
 
-interface DrawUniforms {
+interface DrawPosesUniforms {
   uVideo: REGL.Texture2D;
   uPoses: REGL.Texture2D;
   screenShape: REGL.Vec2;
   time: number;
+}
+
+interface DrawBufferProps {
+  buffer: REGL.Framebuffer,
+  outputBuffer: REGL.Framebuffer
+}
+
+interface DrawBufferUniforms {
+  uBuffer: REGL.Framebuffer
 }
 
 interface DrawAttributes {
@@ -21,14 +30,17 @@ interface DrawAttributes {
 }
 
 interface FeedbackProps {
-  frame: REGL.Texture2D;
-  previousFrame: REGL.Texture2D;
-  buffer: REGL.Framebuffer;
+  frame: REGL.Framebuffer;
+  previousFrame: REGL.Framebuffer;
+  outputBuffer: REGL.Framebuffer;
+  firstDraw: boolean;
 }
 
 interface FeedbackUniforms {
   uFrame: REGL.Texture2D,
   uPreviousFrame: REGL.Texture2D,
+  uResolution: [number, number],
+  uFirstDraw: boolean,
   time: number;
 };
 
@@ -45,6 +57,11 @@ function createPoseCanvas(width: number, height: number): HTMLCanvasElement {
 }
 
 
+const planeAttributes: number[] = [
+  -2, 0,
+  0, -2,
+  2, 2
+]
 
 function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
   // const canvas = document.getElementById('output') as HTMLCanvasElement;
@@ -54,18 +71,28 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
 
   const regl = REGL();
 
-  const capturePosesFromVideo = regl<DrawUniforms, DrawAttributes, DrawProps>({
-    frag: require('./src/posesOnVideo.frag'),
-    vert: require('./src/posesOnVideo.vert'),
+  const drawBuffer = regl<DrawBufferUniforms, DrawAttributes, DrawBufferProps>({
+    frag: require('./src/drawBuffer.frag'),
+    vert: require('./src/fullPlane.vert'),
     attributes: {
-      position: [
-        -2, 0,
-        0, -2,
-        2, 2]
+      position: planeAttributes
     },
     uniforms: {
-      uVideo: regl.prop<DrawProps, 'video'>('video'),
-      uPoses: regl.prop<DrawProps,  'posesTexture'>('posesTexture'),
+      uBuffer: regl.prop<DrawBufferProps, 'buffer'>('buffer')
+    },
+    framebuffer: regl.prop<DrawBufferProps, 'outputBuffer'>('outputBuffer'),
+    count: 3
+  })
+
+  const capturePosesFromVideo = regl<DrawPosesUniforms, DrawAttributes, DrawPosesProps>({
+    frag: require('./src/posesOnVideo.frag'),
+    vert: require('./src/fullPlane.vert'),
+    attributes: {
+      position: planeAttributes
+    },
+    uniforms: {
+      uVideo: regl.prop<DrawPosesProps, 'video'>('video'),
+      uPoses: regl.prop<DrawPosesProps,  'posesFeedback'>('posesFeedback'),
 
       screenShape: ({viewportWidth, viewportHeight}) =>
         [viewportWidth, viewportHeight],
@@ -73,24 +100,26 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
       time: regl.context('time')
     },
     count: 3,
-    framebuffer: regl.prop<DrawProps, 'buffer'>('buffer')
+    framebuffer: regl.prop<DrawPosesProps, 'buffer'>('buffer')
   });
 
-  const drawFeeedback = regl<FeedbackUniforms, DrawAttributes, FeedbackProps>({
+  const drawFeedback = regl<FeedbackUniforms, DrawAttributes, FeedbackProps>({
     frag: require('./src/feedback.frag'),
-    vert: require('./src/posesOnVideo.vert'),
+    vert: require('./src/fullPlane.vert'),
     attributes: {
-      position: [
-        -2, 0,
-        0, -2,
-        2, 2]
+      position: planeAttributes
     },
     uniforms: {
       uFrame: regl.prop<FeedbackProps, 'frame'>('frame'),
       uPreviousFrame: regl.prop<FeedbackProps, 'previousFrame'>('previousFrame'),
-      time: regl.context('time')
+      time: regl.context('time'),
+      uResolution: ({ drawingBufferWidth, drawingBufferHeight }) => [
+        drawingBufferWidth,
+        drawingBufferHeight
+      ],
+      uFirstDraw: regl.prop<FeedbackProps, 'firstDraw'>('firstDraw')
     },
-    framebuffer: regl.prop<FeedbackProps, 'buffer'>('buffer'),
+    framebuffer: regl.prop<FeedbackProps, 'outputBuffer'>('outputBuffer'),
     count: 3
   })
 
@@ -102,45 +131,80 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
 
   const posesTexture = regl.texture(posesCanvas);
 
+  let feedbackFBO = regl.framebuffer({
+    width: canvas.width,
+    height: canvas.height,
+    colorFormat: 'rgba',
+  })
+
+  const lastFrameFBO = regl.framebuffer({
+    width: canvas.width,
+    height: canvas.height,
+    colorFormat: 'rgba',
+  })
+  const lastFrameTexture = regl.texture()
+
+  let initialized = false;
+
   window.addEventListener('resize', () => {
     const updatedCanvas = document.getElementsByTagName('canvas')[0]
     posesCanvas.width = updatedCanvas.width
     posesCanvas.height = updatedCanvas.height
   })
 
-  async function poseEstimationFrame() {
-    const poses = await net.estimateMultiplePoses(video);
+  let posesRendered = true;
 
-    const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
+  let poses: posenet.Pose[] = [];
 
-    renderPosesOnCanvas(poses, posesCanvas, scale);
+  async function updatePoses() {
+    poses = await net.estimateMultiplePoses(video);
 
-    // update texture with contents from canvas
-    posesTexture(posesCanvas);
+    // if (!initialized) {
+    //   lastFrameTexture(posesCanvas)
+    //   initialized = true;
+    // }
 
-    requestAnimationFrame(poseEstimationFrame);
+    posesRendered = false;
+
+    requestAnimationFrame(updatePoses);
   }
 
-  poseEstimationFrame();
+  updatePoses();
 
   const poseVideoFBO = regl.framebuffer({
     width: canvas.width,
     height: canvas.height
   })
 
-  const feedbackFBO = regl.framebuffer({
-    width: canvas.width,
-    height: canvas.height
-  })
+  let firstDraw = true;
 
   regl.frame(() => {
-    regl.clear({
-      color: [0, 0, 0, 1]
-    })
+    if (!posesRendered) {
+      const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
 
-    capturePosesFromVideo({ video: videoTexture.subimage(video), posesTexture, buffer: poseVideoFBO })
+      renderPosesOnCanvas(poses, posesCanvas, scale);
+      posesTexture(posesCanvas);
+ 
+      drawFeedback({ 
+        frame: posesTexture, 
+        previousFrame: lastFrameFBO, 
+        firstDraw, 
+        outputBuffer: feedbackFBO 
+      });
 
-  })
+      drawBuffer({
+        buffer: feedbackFBO,
+        outputBuffer: lastFrameFBO
+      });
+        
+      posesRendered = true;
+    }
+
+    drawBuffer({ buffer: feedbackFBO });
+
+    // capturePosesFromVideo({ video: videoTexture.subimage(video), posesFeedback: feedbackFBO })
+    firstDraw = false;
+  });
 }
 
 async function bindPage() {
