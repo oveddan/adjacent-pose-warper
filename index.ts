@@ -1,49 +1,21 @@
 import { isMobile, loadVideo } from './camera'
 import * as posenet from '@tensorflow-models/posenet'
+import fakePoses from './src/fakePoses';
 import { renderPosesOnCanvas } from './src/util'
 import REGL from 'regl' 
 
-interface DrawPosesProps {
-  video: REGL.Texture2D;
-  posesFeedback: REGL.Framebuffer;
-  buffer: REGL.Framebuffer;
-}
+import images from './images';
 
-interface DrawPosesUniforms {
-  uVideo: REGL.Texture2D;
+interface WarpImageUniforms {
   uPoses: REGL.Texture2D;
+  uImage: REGL.Texture2D;
+  uTime: number;
   screenShape: REGL.Vec2;
-  time: number;
-}
-
-interface DrawBufferProps {
-  buffer: REGL.Framebuffer,
-  outputBuffer: REGL.Framebuffer
-}
-
-interface DrawBufferUniforms {
-  uBuffer: REGL.Framebuffer
 }
 
 interface DrawAttributes {
   position: number[];
 }
-
-interface FeedbackProps {
-  frame: REGL.Framebuffer;
-  previousFrame: REGL.Framebuffer;
-  outputBuffer: REGL.Framebuffer;
-  firstDraw: boolean;
-}
-
-interface FeedbackUniforms {
-  uFrame: REGL.Texture2D,
-  uPreviousFrame: REGL.Texture2D,
-  uResolution: [number, number],
-  uFirstDraw: boolean,
-  time: number;
-};
-
 
 function createPoseCanvas(width: number, height: number): HTMLCanvasElement {
   const posesCanvas = document.createElement('canvas');
@@ -56,6 +28,40 @@ function createPoseCanvas(width: number, height: number): HTMLCanvasElement {
   return posesCanvas;
 }
 
+function loadImageTexture(reglInstance: REGL.Regl, src: string): Promise<REGL.Texture2D> {
+  return new Promise<REGL.Texture2D>((resolve, reject) => {
+    const image = new Image();
+    image.src = src
+    image.onload = function () {
+      const imageTexture = reglInstance.texture({
+        wrap: "mirror",
+        min: 'linear mipmap linear',
+        mag: 'nearest',
+        data: image 
+      });
+      // imageTexture(image);
+      resolve(imageTexture);
+    }
+    image.onerror = function(e: ErrorEvent) { 
+      reject(e);
+    }
+  })
+}
+
+function getParameterByName(name) {
+  const url = window.location.href;
+  name = name.replace(/[\[\]]/g, "\\$&");
+  var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+      results = regex.exec(url);
+  if (!results) return null;
+  if (!results[2]) return '';
+  return decodeURIComponent(results[2].replace(/\+/g, " "));
+}
+
+function getImagePath() {
+  const imageName = getParameterByName('image') || 'wood.jpg';
+  return images[imageName];
+}
 
 const planeAttributes: number[] = [
   -2, 0,
@@ -63,7 +69,7 @@ const planeAttributes: number[] = [
   2, 2
 ]
 
-function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
+async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
   // const canvas = document.getElementById('output') as HTMLCanvasElement;
   // const ctx = canvas.getContext('2d');
   // since images are being fed from a webcam
@@ -71,145 +77,53 @@ function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
 
   const regl = REGL();
 
-  const drawBuffer = regl<DrawBufferUniforms, DrawAttributes, DrawBufferProps>({
-    frag: require('./src/drawBuffer.frag'),
-    vert: require('./src/fullPlane.vert'),
-    attributes: {
-      position: planeAttributes
-    },
-    uniforms: {
-      uBuffer: regl.prop<DrawBufferProps, 'buffer'>('buffer')
-    },
-    framebuffer: regl.prop<DrawBufferProps, 'outputBuffer'>('outputBuffer'),
-    count: 3
-  })
-
-  const capturePosesFromVideo = regl<DrawPosesUniforms, DrawAttributes, DrawPosesProps>({
-    frag: require('./src/posesOnVideo.frag'),
-    vert: require('./src/fullPlane.vert'),
-    attributes: {
-      position: planeAttributes
-    },
-    uniforms: {
-      uVideo: regl.prop<DrawPosesProps, 'video'>('video'),
-      uPoses: regl.prop<DrawPosesProps,  'posesFeedback'>('posesFeedback'),
-
-      screenShape: ({viewportWidth, viewportHeight}) =>
-        [viewportWidth, viewportHeight],
-  
-      time: regl.context('time')
-    },
-    count: 3,
-    framebuffer: regl.prop<DrawPosesProps, 'buffer'>('buffer')
-  });
-
-  const drawFeedback = regl<FeedbackUniforms, DrawAttributes, FeedbackProps>({
-    frag: require('./src/feedback.frag'),
-    vert: require('./src/fullPlane.vert'),
-    attributes: {
-      position: planeAttributes
-    },
-    uniforms: {
-      uFrame: regl.prop<FeedbackProps, 'frame'>('frame'),
-      uPreviousFrame: regl.prop<FeedbackProps, 'previousFrame'>('previousFrame'),
-      time: regl.context('time'),
-      uResolution: ({ drawingBufferWidth, drawingBufferHeight }) => [
-        drawingBufferWidth,
-        drawingBufferHeight
-      ],
-      uFirstDraw: regl.prop<FeedbackProps, 'firstDraw'>('firstDraw')
-    },
-    framebuffer: regl.prop<FeedbackProps, 'outputBuffer'>('outputBuffer'),
-    count: 3
-  })
-
-  const videoTexture = regl.texture(video);
-
   const canvas = document.getElementsByTagName('canvas')[0]
 
   const posesCanvas = createPoseCanvas(canvas.width, canvas.height);
-
   const posesTexture = regl.texture(posesCanvas);
 
-  let feedbackFBO = regl.framebuffer({
-    width: canvas.width,
-    height: canvas.height,
-    colorFormat: 'rgba',
+  const imageTexture = await loadImageTexture(regl, getImagePath());
+
+  const warpImageFromPoses = regl<WarpImageUniforms, DrawAttributes>({
+    frag: require('./src/drawPoses.frag'),
+    vert: require('./src/fullPlane.vert'),
+    attributes: {
+      position: planeAttributes
+    },
+    uniforms: {
+      uPoses: posesTexture,
+      uImage: imageTexture,
+      screenShape: ({viewportWidth, viewportHeight}) =>
+        [viewportWidth, viewportHeight],
+  
+      uTime: regl.context('time')
+    },
+    count: 3
   })
 
-  const lastFrameFBO = regl.framebuffer({
-    width: canvas.width,
-    height: canvas.height,
-    colorFormat: 'rgba',
-  })
-  const lastFrameTexture = regl.texture()
 
-  let initialized = false;
-
-  window.addEventListener('resize', () => {
-    const updatedCanvas = document.getElementsByTagName('canvas')[0]
-    posesCanvas.width = updatedCanvas.width
-    posesCanvas.height = updatedCanvas.height
-  })
-
-  let posesRendered = true;
-
-  let poses: posenet.Pose[] = [];
-
+  // in a separate loop, fetch poses and write them to a texture for use in the shader.
   async function updatePoses() {
-    poses = await net.estimateMultiplePoses(video);
+    const poses = await net.estimateMultiplePoses(video, 0.3, false, 16, 1);
 
-    // if (!initialized) {
-    //   lastFrameTexture(posesCanvas)
-    //   initialized = true;
-    // }
+    const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
 
-    posesRendered = false;
-
+    renderPosesOnCanvas(poses, posesCanvas, scale);
+    posesTexture(posesCanvas);
+ 
     requestAnimationFrame(updatePoses);
   }
 
   updatePoses();
 
-  const poseVideoFBO = regl.framebuffer({
-    width: canvas.width,
-    height: canvas.height
-  })
-
-  let firstDraw = true;
-
   regl.frame(() => {
-    if (!posesRendered) {
-      const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
-
-      renderPosesOnCanvas(poses, posesCanvas, scale);
-      posesTexture(posesCanvas);
- 
-      drawFeedback({ 
-        frame: posesTexture, 
-        previousFrame: lastFrameFBO, 
-        firstDraw, 
-        outputBuffer: feedbackFBO 
-      });
-
-      drawBuffer({
-        buffer: feedbackFBO,
-        outputBuffer: lastFrameFBO
-      });
-        
-      posesRendered = true;
-    }
-
-    drawBuffer({ buffer: feedbackFBO });
-
-    // capturePosesFromVideo({ video: videoTexture.subimage(video), posesFeedback: feedbackFBO })
-    firstDraw = false;
+    warpImageFromPoses();
   });
 }
 
 async function bindPage() {
   const mobileNetArchitecture =  isMobile() ? 0.50 : 0.75;
-  const net = await posenet.load(mobileNetArchitecture);
+  const net = await posenet.load(0.50);
 
   document.getElementById('main').style.display = 'block';
 

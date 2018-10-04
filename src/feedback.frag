@@ -25,6 +25,6 @@ void main () {
  
   // r = frame.r;
 
-  // gl_FragColor = previousFrame;
-  gl_FragColor = vec4(r, 0., 0., 1.); 
+  gl_FragColor = previousFrame;
+  // gl_FragColor = vec4(r, 0., 0., 1.); 
 }
