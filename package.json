@@ -15,6 +15,7 @@
     "typescript": "^3.1.1"
   },
   "scripts": {
-    "watch": "NODE_ENV=development parcel index.html"
+    "watch": "NODE_ENV=development parcel index.html",
+    "build": "NODE_ENV=production parcel build index.html --public-url ./"
   }
 }
