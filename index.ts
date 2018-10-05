@@ -69,10 +69,6 @@ const planeAttributes: number[] = [
   2, 2
 ]
 
-// function lerpPoses(lastPoses: posenet.Pose[], nextPoses: posenet.Pose[]) {
-
-// }
-
 const minKeypointConfidence = 0.2;
 
 function getKeypointToUse(lastKeypoint: posenet.Keypoint, currentKeypoint: posenet.Keypoint, minKeypointConfidence: number): posenet.Keypoint {
@@ -116,6 +112,7 @@ async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNe
   let lerpedKeypoints: posenet.Keypoint[];
   let currentKeypoints: posenet.Keypoint[];
   const lerpSpeed = 0.2;
+  const maxChange = 4;
 
   // do in loop
   async function estimatePosesAndWriteToTexture() {
@@ -138,7 +135,7 @@ async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNe
 
   regl.frame(() => {
     if (currentKeypoints) {
-      lerpedKeypoints = lerpKeypoints(lerpedKeypoints, currentKeypoints, lerpSpeed);
+      lerpedKeypoints = lerpKeypoints(lerpedKeypoints, currentKeypoints, lerpSpeed, maxChange);
 
       const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
       renderKeypointsOnCanvas(lerpedKeypoints, offScreenPosesCanvas, scale);

@@ -113,21 +113,33 @@ export function getCenterXPose(poses: posenet.Pose[], minPoseConfidence = 0.2, m
   return centerPose;
 }
 
-function lerp(last: number, next: number, percentage: number) {
-  return last + (next - last) * percentage;
+function lerp(last: number, next: number, percentage: number, maxChange: number) {
+  const change = (next - last) * percentage;
+
+  let clampedChange;
+
+  // if negative, make sure above negative change
+  if (change < 0) 
+    clampedChange = Math.max(change, -maxChange);
+  // else make sure below max change
+  else
+    clampedChange = Math.min(change, maxChange);
+
+  return last + clampedChange;
 }
 
-function lerpPosition(last: { x: number, y: number}, next: { x: number, y: number}, percentage: number) {
+function lerpPosition(last: { x: number, y: number}, next: { x: number, y: number}, percentage: number, maxChange: number) {
   return {
-    x: lerp(last.x, next.x, percentage),
-    y: lerp(last.y, next.y, percentage),
+    x: lerp(last.x, next.x, percentage, maxChange),
+    y: lerp(last.y, next.y, percentage, maxChange),
   }
 }
 
-export function lerpKeypoints(lastKeypoints: posenet.Keypoint[], currentKeypoints: posenet.Keypoint[], lerpPercentage: number): posenet.Keypoint[] {
+export function lerpKeypoints(lastKeypoints: posenet.Keypoint[],
+  currentKeypoints: posenet.Keypoint[], lerpPercentage: number, maxChange: number): posenet.Keypoint[] {
   if (!lastKeypoints || lastKeypoints.length === 0) return currentKeypoints;
   return currentKeypoints.map(((currentKeypoint, i) => ({
     ...currentKeypoint,
-    position: lerpPosition(lastKeypoints[i].position, currentKeypoint.position, lerpPercentage)
+    position: lerpPosition(lastKeypoints[i].position, currentKeypoint.position, lerpPercentage, maxChange)
   }))); 
 }
