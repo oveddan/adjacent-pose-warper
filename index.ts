@@ -112,7 +112,7 @@ async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNe
   let lerpedKeypoints: posenet.Keypoint[];
   let currentKeypoints: posenet.Keypoint[];
   const lerpSpeed = 0.2;
-  const maxChange = 4;
+  const maxChange = 20;
 
   // do in loop
   async function estimatePosesAndWriteToTexture() {

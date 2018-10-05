@@ -81,5 +81,6 @@ void main () {
   vec4 color = texture2D(uImage, warpedPosition);
   // color = imagePixels;
   // color = vec4(n, 0., 0., 1.);
+  // color = vec4(pose, 0., 0., 1.);
   gl_FragColor = color;
 }
