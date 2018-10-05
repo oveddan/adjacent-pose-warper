@@ -6,8 +6,14 @@ import REGL from 'regl'
 
 import images from './images';
 
+interface NormalUniforms {
+  uPoses: REGL.Texture2D;
+  screenShape: REGL.Vec2;
+}
+
 interface WarpImageUniforms {
   uPoses: REGL.Texture2D;
+  uNormals: REGL.Texture2D;
   uImage: REGL.Texture2D;
   uTime: number;
   screenShape: REGL.Vec2;
@@ -80,20 +86,52 @@ function getKeypointToUse(lastKeypoint: posenet.Keypoint, currentKeypoint: posen
   return lastKeypoint;
 }
 
+const RADIUS = 512;
+const INITIAL_CONDITIONS = (Array(RADIUS * RADIUS * 4)).fill(0).map(
+  () => Math.random() > 0.9 ? 255 : 0)
+
+
+const posesCanvasWidth = 300;
+const posesCanvasHeight = posesCanvasWidth;
 
 async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
   const regl = REGL();
 
   const canvas = document.getElementsByTagName('canvas')[0]
 
-  const offScreenPosesCanvas = createPoseCanvas(canvas.width, canvas.height);
+  const offScreenPosesCanvas = createPoseCanvas(RADIUS, RADIUS);
   const posesTexture = regl.texture(offScreenPosesCanvas);
+
+  const normalFrameBuffer = regl.framebuffer({
+    color: regl.texture({
+      radius: RADIUS,
+      data: INITIAL_CONDITIONS
+    }),
+    depthStencil: false
+  });
+
+  const normalTexture = regl.texture(offScreenPosesCanvas);
 
   setStatusText('loading the image...');
   const imageTexture = await loadImageTexture(regl, getImagePath());
 
+  const normalShader = regl<NormalUniforms, DrawAttributes>({
+    frag: require('./src/drawNormals.frag'),
+    vert: require('./src/fullPlane.vert'),
+    attributes: {
+      position: planeAttributes
+    },
+    uniforms: {
+      uPoses: posesTexture,
+      screenShape: ({viewportWidth, viewportHeight}) =>
+        [viewportWidth, viewportHeight]
+    },
+    framebuffer: normalFrameBuffer,
+    count: 3
+  });
+
   const renderShader = regl<WarpImageUniforms, DrawAttributes>({
-    frag: require('./src/drawPoses.frag'),
+    frag: require('./src/splatter.frag'),
     vert: require('./src/fullPlane.vert'),
     attributes: {
       position: planeAttributes
@@ -101,13 +139,14 @@ async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNe
     uniforms: {
       uPoses: posesTexture,
       uImage: imageTexture,
+      uNormals: normalTexture,
       screenShape: ({viewportWidth, viewportHeight}) =>
         [viewportWidth, viewportHeight],
   
       uTime: regl.context('time')
     },
     count: 3
-  })
+  });
 
   let lerpedKeypoints: posenet.Keypoint[];
   let currentKeypoints: posenet.Keypoint[];
@@ -137,9 +176,22 @@ async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNe
     if (currentKeypoints) {
       lerpedKeypoints = lerpKeypoints(lerpedKeypoints, currentKeypoints, lerpSpeed, maxChange);
 
-      const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
+      const scale: [number, number] = [offScreenPosesCanvas.height / video.height, offScreenPosesCanvas.width / video.width ];
       renderKeypointsOnCanvas(lerpedKeypoints, offScreenPosesCanvas, scale);
-      posesTexture(offScreenPosesCanvas);
+      posesTexture({
+        min: 'linear mipmap nearest',
+        mag: 'linear',
+        data: offScreenPosesCanvas
+      });
+
+      normalShader(() => {
+        regl.draw();
+        normalTexture({
+          copy: true,
+          min: 'mipmap',
+          mag: 'linear',
+        });
+      });
     }
  
     renderShader();

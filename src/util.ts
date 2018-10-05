@@ -3,7 +3,8 @@ import * as posenet from '@tensorflow-models/posenet';
 const minPoseConfidence = 0.1;
 const minPartConfidence = 0.1;
 
-const lineWidth = 20;
+const lineWidth = 30;
+const blurSize = 0;
 
 function toTuple({y, x}: { x: number, y: number }): number[] {
   return [y, x];
@@ -58,7 +59,7 @@ export function renderKeypointsOnCanvas(keypoints: posenet.Keypoint[], canvas: H
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.lineCap = "round";
-  ctx.filter = 'blur(10px)';
+  ctx.filter = `blur(${blurSize}px)`;
 
   drawKeypoints(keypoints, minPartConfidence, ctx, white, scale)
   drawSkeleton(keypoints, minPartConfidence, ctx, scale);

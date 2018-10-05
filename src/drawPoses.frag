@@ -4,8 +4,10 @@ precision mediump float;
 
 uniform sampler2D uPoses;
 uniform sampler2D uImage;
+uniform sampler2D uNormals;
 uniform float uTime;
 varying vec2 vTexcoord;
+varying vec2 vPosition;
 
 #define PI 3.14
 
@@ -68,19 +70,76 @@ float cnoise(vec2 P)
   return 2.3 * n_xy;
 }
 
+// float specularStrength = 0.5;
+// vec3 viewPos = vec3(0., 0., 10.);
+// vec3 lightDir = vec3(0., 0., -1.);
+
+// float getSpecular(vec3 norm) {
+//   vec3 viewDir = normalize(viewPos - vec3(vPosition.x, vPosition.y, 0.));
+//   vec3 reflectDir = reflect(-lightDir, norm); 
+//   float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.);
+//   return specularStrength * spec;
+// }
+
+float getPoseStrength(vec2 position) {
+  float s = texture2D(uPoses, position)[0];
+
+  return pow(s, .3);
+}
+
+vec3 si = vec3(1.);
+vec3 lightPosition = vec3(0., -2., 10.);
+
+float p = 2.;
+
+vec3 specularShading(vec3 color, vec3 position, vec3 normal) {
+  vec3 lightDirection = normalize(lightPosition - position);
+  vec3 viewDirection = normalize(vec3(0.) - position);
+  vec3 h = normalize(viewDirection + lightDirection);
+
+  return si * color * pow(max(0., dot(normal, h)), p);
+}
+
+vec3 getNormal(vec2 position) {
+  return texture2D(uNormals, position).xyz;
+}
+
 void main () {
-  vec4 imagePixels = texture2D(uImage, vTexcoord);
-  float n = abs(cnoise(vTexcoord + sin(uTime / 10.)));
-  float pose = texture2D(uPoses, vTexcoord)[0];
+  float n = cnoise((vTexcoord + sin(uTime / 10.)) * 15.);
+  float pose = getPoseStrength(vTexcoord + n / 100.);
 
   float cursorStrength = pose;
   vec2 warpedPosition = vTexcoord + n * cursorStrength;
+  vec4 imagePixels = texture2D(uImage, vTexcoord);
   // imagePixels *= step(pose, .7);
 
   // vec4 color = vec4(pose, 0., 0., 1.);
-  vec4 color = texture2D(uImage, warpedPosition);
+  // vec4 color = texture2D(uImage, warpedPosition);
+  vec3 color = texture2D(uImage, warpedPosition).xyz;
+
+  vec3 normal = getNormal(vTexcoord);
+
+  vec3 position = vec3((vTexcoord.x - .5) * 2., (vTexcoord.y - .5) * 2., pose * 2.);
+
+  vec3 specular = specularShading(color, position, normal);
+  vec3 lightDirection = normalize(lightPosition - position);
+  vec3 viewDirection = normalize(vec3(0., 0., 10.) - position);
+
+  // color = mix(color, vec3(0., 1., 1.), pose);
+
+  color = (specular + color * .8) * pose; 
+
+
+  // color = texture2D(uNormals, vTexcoord).xyz;
+  // color = viewDirection;
+
+  // color *= specular;
+  // color = vec4(normal.x, normal.y, normal.z, 1.);
+  // color = vec4(specular, 0., 0., 1.);
+
   // color = imagePixels;
   // color = vec4(n, 0., 0., 1.);
-  // color = vec4(pose, 0., 0., 1.);
-  gl_FragColor = color;
+  color = vec3(pose, 0., 0.);
+  // color = vec3(vPosition.x, vPosition.y, 0.);
+  gl_FragColor = vec4(color, 1.);
 }
