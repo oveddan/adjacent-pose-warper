@@ -131,7 +131,7 @@ async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNe
   });
 
   const renderShader = regl<WarpImageUniforms, DrawAttributes>({
-    frag: require('./src/splatter.frag'),
+    frag: require('./src/drawPoses.frag'),
     vert: require('./src/fullPlane.vert'),
     attributes: {
       position: planeAttributes

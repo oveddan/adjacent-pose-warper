@@ -105,8 +105,8 @@ vec3 getNormal(vec2 position) {
 }
 
 void main () {
-  float n = cnoise((vTexcoord + sin(uTime / 10.)) * 15.);
-  float pose = getPoseStrength(vTexcoord + n / 100.);
+  float n = abs(cnoise(vTexcoord + sin(uTime / 10.)));
+  float pose = getPoseStrength(vTexcoord);
 
   float cursorStrength = pose;
   vec2 warpedPosition = vTexcoord + n * cursorStrength;
@@ -125,10 +125,7 @@ void main () {
   vec3 lightDirection = normalize(lightPosition - position);
   vec3 viewDirection = normalize(vec3(0., 0., 10.) - position);
 
-  // color = mix(color, vec3(0., 1., 1.), pose);
-
   color = (specular + color * .8) * pose; 
-
 
   // color = texture2D(uNormals, vTexcoord).xyz;
   // color = viewDirection;
@@ -139,7 +136,7 @@ void main () {
 
   // color = imagePixels;
   // color = vec4(n, 0., 0., 1.);
-  color = vec3(pose, 0., 0.);
+  // color = vec3(pose, 0., 0.);
   // color = vec3(vPosition.x, vPosition.y, 0.);
   gl_FragColor = vec4(color, 1.);
 }

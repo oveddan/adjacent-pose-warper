@@ -3,8 +3,8 @@ import * as posenet from '@tensorflow-models/posenet';
 const minPoseConfidence = 0.1;
 const minPartConfidence = 0.1;
 
-const lineWidth = 30;
-const blurSize = 0;
+const lineWidth = 40;
+const blurSize = 5;
 
 function toTuple({y, x}: { x: number, y: number }): number[] {
   return [y, x];
