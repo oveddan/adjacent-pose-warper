@@ -3,7 +3,6 @@ import * as posenet from '@tensorflow-models/posenet';
 const minPoseConfidence = 0.1;
 const minPartConfidence = 0.1;
 
-
 const lineWidth = 20;
 
 function toTuple({y, x}: { x: number, y: number }): number[] {
@@ -53,17 +52,82 @@ function drawSkeleton(keypoints: posenet.Keypoint[], minConfidence: number, ctx:
   });
 }
 
-export function renderPosesOnCanvas(poses: posenet.Pose[], canvas: HTMLCanvasElement, scale: [number, number]) {
+export function renderKeypointsOnCanvas(keypoints: posenet.Keypoint[], canvas: HTMLCanvasElement, scale: [number, number]) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.lineCap = "round";
   ctx.filter = 'blur(10px)';
-  poses.forEach(({score, keypoints}) => {
-    if (score >= minPoseConfidence) {
-      drawKeypoints(keypoints, minPartConfidence, ctx, white, scale)
-      drawSkeleton(keypoints, minPartConfidence, ctx, scale);
+
+  drawKeypoints(keypoints, minPartConfidence, ctx, white, scale)
+  drawSkeleton(keypoints, minPartConfidence, ctx, scale);
+}
+
+function getCenterX(keypoints: posenet.Keypoint[], minKeypointConfidence: number) {
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+
+  for(let keypoint of keypoints) {
+    if(keypoint.score >= minKeypointConfidence) {
+      minX = Math.min(keypoint.score, minX);
+      maxX = Math.max(keypoint.score, maxX);
     }
-  });
+  }
+  return minX + (maxX - minX) / 2;
+}
+
+export function getCenterXPose(poses: posenet.Pose[], minPoseConfidence = 0.2, minKeypointConfidence = 0.2): posenet.Pose {
+  let totalX = 0;
+
+  let posesAndCenterXs: [[posenet.Pose, number]];
+
+  poses.forEach(pose => {
+    if (pose.score >= minPoseConfidence) {
+      const centerX = getCenterX(pose.keypoints, minKeypointConfidence);
+      totalX += centerX;
+      if (!posesAndCenterXs)
+        posesAndCenterXs = [[pose, centerX]];
+      else
+        posesAndCenterXs.push([pose, centerX]);
+    }
+  })  
+
+  if (!posesAndCenterXs) return null;
+
+  const meanX = totalX / posesAndCenterXs.length;
+
+  let centerPose: posenet.Pose;
+
+  let closestDistanceToMean = Number.POSITIVE_INFINITY;
+
+  posesAndCenterXs.forEach(([pose, centerX])=> {
+    const distFromMean = Math.abs(centerX - meanX);
+
+    if (distFromMean < closestDistanceToMean) {
+      centerPose = pose;
+      closestDistanceToMean = distFromMean;
+    }
+  })
+
+  return centerPose;
+}
+
+function lerp(last: number, next: number, percentage: number) {
+  return last + (next - last) * percentage;
+}
+
+function lerpPosition(last: { x: number, y: number}, next: { x: number, y: number}, percentage: number) {
+  return {
+    x: lerp(last.x, next.x, percentage),
+    y: lerp(last.y, next.y, percentage),
+  }
+}
+
+export function lerpKeypoints(lastKeypoints: posenet.Keypoint[], currentKeypoints: posenet.Keypoint[], lerpPercentage: number): posenet.Keypoint[] {
+  if (!lastKeypoints || lastKeypoints.length === 0) return currentKeypoints;
+  return currentKeypoints.map(((currentKeypoint, i) => ({
+    ...currentKeypoint,
+    position: lerpPosition(lastKeypoints[i].position, currentKeypoint.position, lerpPercentage)
+  }))); 
 }

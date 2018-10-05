@@ -1,7 +1,7 @@
-import { isMobile, loadVideo } from './camera'
+import { isMobile, loadVideo } from './src/camera'
 import * as posenet from '@tensorflow-models/posenet'
 import fakePoses from './src/fakePoses';
-import { renderPosesOnCanvas } from './src/util'
+import { renderPosesOnCanvas, getCenterXPose, renderKeypointsOnCanvas, lerpKeypoints } from './src/util'
 import REGL from 'regl' 
 
 import images from './images';
@@ -48,7 +48,7 @@ function loadImageTexture(reglInstance: REGL.Regl, src: string): Promise<REGL.Te
   })
 }
 
-function getParameterByName(name) {
+function getQueryStringValue(name) {
   const url = window.location.href;
   name = name.replace(/[\[\]]/g, "\\$&");
   var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
@@ -59,7 +59,7 @@ function getParameterByName(name) {
 }
 
 function getImagePath() {
-  const imageName = getParameterByName('image') || 'wood.jpg';
+  const imageName = getQueryStringValue('image') || 'wood.jpg';
   return images[imageName];
 }
 
@@ -69,22 +69,34 @@ const planeAttributes: number[] = [
   2, 2
 ]
 
-async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
-  // const canvas = document.getElementById('output') as HTMLCanvasElement;
-  // const ctx = canvas.getContext('2d');
-  // since images are being fed from a webcam
-  const flipHorizontal = true;
+// function lerpPoses(lastPoses: posenet.Pose[], nextPoses: posenet.Pose[]) {
 
+// }
+
+const minKeypointConfidence = 0.2;
+
+function getKeypointToUse(lastKeypoint: posenet.Keypoint, currentKeypoint: posenet.Keypoint, minKeypointConfidence: number): posenet.Keypoint {
+  if (!lastKeypoint) return currentKeypoint;
+
+  if (currentKeypoint.score >= minKeypointConfidence)
+    return currentKeypoint;
+
+  return lastKeypoint;
+}
+
+
+async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNet) {
   const regl = REGL();
 
   const canvas = document.getElementsByTagName('canvas')[0]
 
-  const posesCanvas = createPoseCanvas(canvas.width, canvas.height);
-  const posesTexture = regl.texture(posesCanvas);
+  const offScreenPosesCanvas = createPoseCanvas(canvas.width, canvas.height);
+  const posesTexture = regl.texture(offScreenPosesCanvas);
 
+  setStatusText('loading the image...');
   const imageTexture = await loadImageTexture(regl, getImagePath());
 
-  const warpImageFromPoses = regl<WarpImageUniforms, DrawAttributes>({
+  const renderShader = regl<WarpImageUniforms, DrawAttributes>({
     frag: require('./src/drawPoses.frag'),
     vert: require('./src/fullPlane.vert'),
     attributes: {
@@ -101,41 +113,68 @@ async function detectPoseInRealTime(video: HTMLVideoElement, net: posenet.PoseNe
     count: 3
   })
 
+  let lerpedKeypoints: posenet.Keypoint[];
+  let currentKeypoints: posenet.Keypoint[];
+  const lerpSpeed = 0.2;
 
-  // in a separate loop, fetch poses and write them to a texture for use in the shader.
-  async function updatePoses() {
+  // do in loop
+  async function estimatePosesAndWriteToTexture() {
     const poses = await net.estimateMultiplePoses(video, 0.3, false, 16, 1);
 
-    const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
+    const centerPose = getCenterXPose(poses);
 
-    renderPosesOnCanvas(poses, posesCanvas, scale);
-    posesTexture(posesCanvas);
- 
-    requestAnimationFrame(updatePoses);
+    if (centerPose) {
+      // lastKeypoints = storeLastKeypoints(lerpedKeypoints, currentKeypoints, minKeypointConfidence);
+      // lastKeypointTime = new Date().getTime();
+      currentKeypoints = centerPose.keypoints;
+    }
+
+    // start over
+    requestAnimationFrame(estimatePosesAndWriteToTexture);
   }
 
-  updatePoses();
+  hideStatusText();
+  estimatePosesAndWriteToTexture();
 
   regl.frame(() => {
-    warpImageFromPoses();
+    if (currentKeypoints) {
+      lerpedKeypoints = lerpKeypoints(lerpedKeypoints, currentKeypoints, lerpSpeed);
+
+      const scale: [number, number] = [canvas.height / video.height, canvas.width / video.width ];
+      renderKeypointsOnCanvas(lerpedKeypoints, offScreenPosesCanvas, scale);
+      posesTexture(offScreenPosesCanvas);
+    }
+ 
+    renderShader();
   });
 }
 
+function setStatusText(text) {
+  const status = document.getElementById('info');
+  status.innerHTML = text;
+  status.style.display = 'block';
+}
+
+function hideStatusText() {
+  document.getElementById('info').style.display = 'none';
+}
+
 async function bindPage() {
-  const mobileNetArchitecture =  isMobile() ? 0.50 : 0.75;
-  const net = await posenet.load(0.50);
+  const mobileNetArchitecture = 0.50;
+  setStatusText('loading PoseNet...');
+  const net = await posenet.load(mobileNetArchitecture);
 
   document.getElementById('main').style.display = 'block';
 
   let video: HTMLVideoElement;
 
   try {
+    setStatusText('opening the webcam...');
     video = await loadVideo();
   } catch (e) {
     let info = document.getElementById('info');
-    info.textContent = 'this browser does not support video capture,' +
-        'or this device does not have a camera';
-    info.style.display = 'block';
+    setStatusText('this browser does not support video capture,' +
+        'or this device does not have a camera');
     throw e;
   }
 

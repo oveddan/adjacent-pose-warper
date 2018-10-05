@@ -70,19 +70,16 @@ float cnoise(vec2 P)
 
 void main () {
   vec4 imagePixels = texture2D(uImage, vTexcoord);
-  // float n = cnoise(vTexcoord);
-  float n = abs(cnoise(vTexcoord));
+  float n = abs(cnoise(vTexcoord + sin(uTime / 10.)));
   float pose = texture2D(uPoses, vTexcoord)[0];
 
   float cursorStrength = pose;
   vec2 warpedPosition = vTexcoord + n * cursorStrength;
-  // warpedPosition = vTexcoord + n;
-
   // imagePixels *= step(pose, .7);
 
   // vec4 color = vec4(pose, 0., 0., 1.);
   vec4 color = texture2D(uImage, warpedPosition);
   // color = imagePixels;
-  // color = vec4(pose, 0., 0., 1.);
+  // color = vec4(n, 0., 0., 1.);
   gl_FragColor = color;
 }
