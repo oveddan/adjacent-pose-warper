@@ -76,7 +76,7 @@ function getCenterX(keypoints: posenet.Keypoint[], minKeypointConfidence: number
   return minX + (maxX - minX) / 2;
 }
 
-export function getCenterXPose(poses: posenet.Pose[], minPoseConfidence, minKeypointConfidence): posenet.Pose {
+export function getCenterXPose(poses: posenet.Pose[], minPoseConfidence: number, minKeypointConfidence: number): posenet.Pose {
   let totalX = 0;
 
   let posesAndCenterXs: [[posenet.Pose, number]];

@@ -3,17 +3,9 @@ import * as posenet from '@tensorflow-models/posenet'
 import { getCenterXPose, renderKeypointsOnCanvas, lerpKeypoints } from './src/util'
 import REGL from 'regl' 
 
-import images from './images';
-
-interface NormalUniforms {
-  uPoses: REGL.Texture2D;
-  screenShape: REGL.Vec2;
-}
-
-interface WarpImageUniforms {
+interface PosesFeedbackUniforms {
   uPoses: REGL.Texture2D;
   uLastFrame: REGL.Texture2D;
-  uCenterPose: REGL.Vec2;
   uTime: number;
   screenShape: REGL.Vec2;
 }
@@ -95,7 +87,7 @@ const posesTexture = regl.texture(offScreenPosesCanvas);
 
 const feedbackTexture = regl.texture(offScreenPosesCanvas);
 
-const renderShader = regl<WarpImageUniforms, DrawAttributes>({
+const renderShader = regl<PosesFeedbackUniforms, DrawAttributes>({
   frag: require('./src/posesFeedback.frag'),
   vert: require('./src/fullPlane.vert'),
   attributes: {
@@ -103,7 +95,6 @@ const renderShader = regl<WarpImageUniforms, DrawAttributes>({
   },
   uniforms: {
     uPoses: posesTexture,
-    uCenterPose: regl.prop<WarpImageUniforms, "uCenterPose">("uCenterPose"),
     uLastFrame: feedbackTexture,
     screenShape: ({viewportWidth, viewportHeight}) =>
       [viewportWidth, viewportHeight],
