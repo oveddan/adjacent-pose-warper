@@ -1,6 +1,7 @@
 import * as posenet from '@tensorflow-models/posenet';
 
 const lineWidth = 30;
+const keypointRadius = lineWidth * .25;
 const blurSize = 0;
 
 function toTuple({y, x}: { x: number, y: number }): number[] {
@@ -25,7 +26,7 @@ function drawKeypoints(
     }
 
     const {y, x} = keypoint.position;
-    drawPoint(ctx, y * sh, x * sw, lineWidth/2, color);
+    drawPoint(ctx, y * sh, x * sw, keypointRadius, color);
   }
 }
 
