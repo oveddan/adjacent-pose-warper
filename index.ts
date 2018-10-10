@@ -1,7 +1,6 @@
-import { isMobile, loadVideo } from './src/camera'
+import { loadVideo } from './src/camera'
 import * as posenet from '@tensorflow-models/posenet'
-import fakePoses from './src/fakePoses';
-import { getCenterXPose, renderKeypointsOnCanvas, lerpKeypoints, getQueryStringValue } from './src/util'
+import { getCenterXPose, renderKeypointsOnCanvas, lerpKeypoints } from './src/util'
 import REGL from 'regl' 
 
 import images from './images';
