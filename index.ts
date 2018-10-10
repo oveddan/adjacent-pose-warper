@@ -13,6 +13,7 @@ interface NormalUniforms {
 
 interface WarpImageUniforms {
   uPoses: REGL.Texture2D;
+  uLastFrame: REGL.Texture2D;
   uCenterPose: REGL.Vec2;
   uTime: number;
   screenShape: REGL.Vec2;
@@ -93,6 +94,8 @@ const posesCanvasSize = 512;
 const offScreenPosesCanvas = createOffScreenPoseCanvas(posesCanvasSize, posesCanvasSize);
 const posesTexture = regl.texture(offScreenPosesCanvas);
 
+const feedbackTexture = regl.texture(offScreenPosesCanvas);
+
 const renderShader = regl<WarpImageUniforms, DrawAttributes>({
   frag: require('./src/splatter.frag'),
   vert: require('./src/fullPlane.vert'),
@@ -102,6 +105,7 @@ const renderShader = regl<WarpImageUniforms, DrawAttributes>({
   uniforms: {
     uPoses: posesTexture,
     uCenterPose: regl.prop<WarpImageUniforms, "uCenterPose">("uCenterPose"),
+    uLastFrame: feedbackTexture,
     screenShape: ({viewportWidth, viewportHeight}) =>
       [viewportWidth, viewportHeight],
 
@@ -111,10 +115,12 @@ const renderShader = regl<WarpImageUniforms, DrawAttributes>({
 });
 
 const mobileNetArchitecture = 0.50;
+const minPoseConfidence = 0.2;
+const minPartConfidence = 0.1;
 
 function renderKeypointsToTexture(keypoints: posenet.Keypoint[], texture: REGL.Texture2D) {
   const scale: [number, number] = [offScreenPosesCanvas.width / video.width, offScreenPosesCanvas.width / video.width ];
-  renderKeypointsOnCanvas(keypoints, offScreenPosesCanvas, scale);
+  renderKeypointsOnCanvas(keypoints, offScreenPosesCanvas, scale, minPartConfidence);
   texture({
     min: 'linear mipmap linear',
     mag: 'linear',
@@ -139,9 +145,9 @@ async function bindPage() {
 
   // have separate loop for pose estimation, so that we can maintain high fps
   async function estimatePosesInLoop() {
-    const poses = await net.estimateMultiplePoses(video, 0.3, false, 16, 1);
+    const poses = await net.estimateMultiplePoses(video, 0.5, false, 16, 1);
 
-    const centerPose = getCenterXPose(poses);
+    const centerPose = getCenterXPose(poses, minPoseConfidence, minKeypointConfidence);
 
     if (centerPose) {
       // lastKeypoints = storeLastKeypoints(lerpedKeypoints, currentKeypoints, minKeypointConfidence);
@@ -156,11 +162,15 @@ async function bindPage() {
   function animate() {
     animation = regl.frame(() => {
       if (currentKeypoints) {
-        lerpedKeypoints = lerpKeypoints(lerpedKeypoints, currentKeypoints, lerpSpeed, maxChange);
+        lerpedKeypoints = lerpKeypoints(lerpedKeypoints, currentKeypoints, lerpSpeed, maxChange, minKeypointConfidence);
 
         renderKeypointsToTexture(lerpedKeypoints, posesTexture);
       }
       renderShader();
+
+      feedbackTexture({
+        copy: true
+      })
     });
   }
 

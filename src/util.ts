@@ -1,10 +1,7 @@
 import * as posenet from '@tensorflow-models/posenet';
 
-const minPoseConfidence = 0.1;
-const minPartConfidence = 0.1;
-
-const lineWidth = 40;
-const blurSize = 5;
+const lineWidth = 30;
+const blurSize = 0;
 
 function toTuple({y, x}: { x: number, y: number }): number[] {
   return [y, x];
@@ -53,7 +50,7 @@ function drawSkeleton(keypoints: posenet.Keypoint[], minConfidence: number, ctx:
   });
 }
 
-export function renderKeypointsOnCanvas(keypoints: posenet.Keypoint[], canvas: HTMLCanvasElement, scale: [number, number]) {
+export function renderKeypointsOnCanvas(keypoints: posenet.Keypoint[], canvas: HTMLCanvasElement, scale: [number, number], minPartConfidence: number) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#000000';
@@ -78,7 +75,7 @@ function getCenterX(keypoints: posenet.Keypoint[], minKeypointConfidence: number
   return minX + (maxX - minX) / 2;
 }
 
-export function getCenterXPose(poses: posenet.Pose[], minPoseConfidence = 0.2, minKeypointConfidence = 0.2): posenet.Pose {
+export function getCenterXPose(poses: posenet.Pose[], minPoseConfidence, minKeypointConfidence): posenet.Pose {
   let totalX = 0;
 
   let posesAndCenterXs: [[posenet.Pose, number]];
@@ -129,20 +126,23 @@ function lerp(last: number, next: number, percentage: number, maxChange: number)
   return last + clampedChange;
 }
 
-function lerpPosition(last: { x: number, y: number}, next: { x: number, y: number}, percentage: number, maxChange: number) {
+function lerpPosition(last: posenet.Keypoint, next: posenet.Keypoint, percentage: number, maxChange: number, minKeypointConfidence: number): posenet.Keypoint {
   return {
-    x: lerp(last.x, next.x, percentage, maxChange),
-    y: lerp(last.y, next.y, percentage, maxChange),
+    part: next.part,
+    position: {
+      x: lerp(last.position.x, next.position.x, percentage, maxChange),
+      y: lerp(last.position.y, next.position.y, percentage, maxChange),
+    },
+    score: lerp(last.score, next.score, percentage, maxChange)
   }
 }
 
 export function lerpKeypoints(lastKeypoints: posenet.Keypoint[],
-  currentKeypoints: posenet.Keypoint[], lerpPercentage: number, maxChange: number): posenet.Keypoint[] {
+  currentKeypoints: posenet.Keypoint[], lerpPercentage: number, maxChange: number, minKeypointConfidence: number): posenet.Keypoint[] {
   if (!lastKeypoints || lastKeypoints.length === 0) return currentKeypoints;
-  return currentKeypoints.map(((currentKeypoint, i) => ({
-    ...currentKeypoint,
-    position: lerpPosition(lastKeypoints[i].position, currentKeypoint.position, lerpPercentage, maxChange)
-  }))); 
+  return currentKeypoints.map(((currentKeypoint, i) => (
+    lerpPosition(lastKeypoints[i], currentKeypoint, lerpPercentage, maxChange, minKeypointConfidence)
+  ))); 
 }
 
 export function getQueryStringValue(name: string): string {
