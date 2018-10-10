@@ -6,8 +6,6 @@ precision mediump float;
 #endif
 
 uniform sampler2D uPoses;
-uniform sampler2D uImage;
-uniform sampler2D uNormals;
 uniform sampler2D uLastFrame;
 uniform float uTime;
 varying vec2 vTexcoord;
@@ -68,43 +66,15 @@ float getPoseStrength(vec2 position) {
 }
 
 void main() {
-    vec2 st = vTexcoord;
-    vec2 pos = vec2(st*3.);
-
-    float DF = 0.0;
-
-    // Add a random position
-    float a = 0.0;
-    vec2 vel = vec2(uTime*.1);
-    DF += snoise(pos+vel)*.25+.25;
-
-    // Add a random position
-    a = snoise(pos*vec2(cos(uTime*0.15),sin(uTime*0.1))*0.1)*3.1415;
-    vel = vec2(cos(a),sin(a));
-    DF += snoise(pos+vel)*.25+.25;
-
-    float black = smoothstep(.7,.75,fract(DF)) ;
-
-
     float n = snoise((vTexcoord + sin(uTime / 10.)) * 5.);
     float pose = getPoseStrength(vTexcoord + n / 100.);
 
-    // black -= pose;
-
-    float ranged = map(black, 0., 1., 0.7, 0.9);
-
-    vec3 color = hsb2rgb(vec3(ranged, 1., 1.));
-
-    color = mix(vec3(1.-black), color, pose);
-
-    color = vec3(pose);
-
-    // color += vec3(1.) * (1.-pose);
+    vec3 color = vec3(pose);
 
     vec2 lastFrameCoord = vec2(1.-vTexcoord.x, 1.-vTexcoord.y);
-    vec3 lastFrame = texture2D(uLastFrame, lastFrameCoord ).rgb;
+    vec3 feedback = texture2D(uLastFrame, lastFrameCoord ).rgb;
 
-    color += lastFrame * 0.95 * vec3(1., 0., 0.);
+    color += feedback * 0.95 * vec3(1., 0., 0.);
 
     gl_FragColor = vec4(color,1.0);
 }

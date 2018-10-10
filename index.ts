@@ -97,7 +97,7 @@ const posesTexture = regl.texture(offScreenPosesCanvas);
 const feedbackTexture = regl.texture(offScreenPosesCanvas);
 
 const renderShader = regl<WarpImageUniforms, DrawAttributes>({
-  frag: require('./src/splatter.frag'),
+  frag: require('./src/posesFeedback.frag'),
   vert: require('./src/fullPlane.vert'),
   attributes: {
     position: planeAttributes
