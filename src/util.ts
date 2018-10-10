@@ -144,3 +144,13 @@ export function lerpKeypoints(lastKeypoints: posenet.Keypoint[],
     position: lerpPosition(lastKeypoints[i].position, currentKeypoint.position, lerpPercentage, maxChange)
   }))); 
 }
+
+export function getQueryStringValue(name: string): string {
+  const url = window.location.href;
+  name = name.replace(/[\[\]]/g, "\\$&");
+  var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+      results = regex.exec(url);
+  if (!results) return null;
+  if (!results[2]) return '';
+  return decodeURIComponent(results[2].replace(/\+/g, " "));
+}

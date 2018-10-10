@@ -85,13 +85,21 @@ void main() {
     float black = smoothstep(.7,.75,fract(DF)) ;
 
 
-    float n = snoise((vTexcoord + sin(uTime / 10.)) * 5.);
+    float n = snoise((vTexcoord + sin(uTime / 10.)) * 10.);
     float pose = getPoseStrength(vTexcoord + n / 100.);
 
-    black -= pose;
+    // black -= pose;
 
     float ranged = map(black, 0., 1., 0.7, 0.9);
 
     vec3 color = hsb2rgb(vec3(ranged, 1., 1.));
+
+    color = mix(vec3(1.-black), color, pose);
+
+    color *= pose;
+
+    color += vec3(1.) * (1.-pose);
+    
+
     gl_FragColor = vec4(color,1.0);
 }

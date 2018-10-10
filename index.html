@@ -1,10 +1,41 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style type="text/css">
+    #buttons {
+      position: fixed;
+      width: 100%;
+      bottom: 10px;
+      text-align: center;
+      z-index: 1;
+    }
+    #buttons button {
+      margin: auto;
+      width: 100px;
+      background: #faebd700;
+      color: #0bcf81;
+      border: solid 1px #0bcf81;
+      padding: .6em 2em;
+      line-height: 2;
+      font-size: 12px;
+      font-family: Arial, Helvetica, sans-serif;
+      cursor: pointer;
+      border-radius: 10px;
+
+    }
+    #buttons button:hover {
+      color: white;
+      background-color: #0bcf82;
+      border: solid 1px #0bcf82;
+      -webkit-transition: all 0.3s ease;
+      -moz-transition: all 0.3s ease;
+      -o-transition: all 0.3s ease;
+      transition: all 0.3s ease;
+    }
+  </style>
 </head>
 <body>
   <div id="info" style='display:none'></div>
-  <script src="./index.ts"></script>
   <div id='main' style='display:none'>
     <video id="video" playsinline style=" -moz-transform: scaleX(-1);
     -o-transform: scaleX(-1);
@@ -13,5 +44,12 @@
     display: none;
     ">
     </video>
+  </div>
+  <div id="buttons">
+    <button id="stop">Stop</button>
+    <button id="start" style="display:none">Start</button>
+  </div>
+
+  <script src="./index.ts"></script>
 </body>
 </html>
