@@ -1,7 +1,7 @@
 # Pose Animations for Adjacent Issue 4
 
 This repository contains an interactive animation for the Adjacent Issue #4.
-It detects poses using [PoseNet], and renders a shader with feedback using the 
+It detects poses using [PoseNet](https://medium.com/tensorflow/real-time-human-pose-estimation-in-the-browser-with-tensorflow-js-7dd0bc881cd5), and renders a shader with feedback using the 
 pose closest to the center of the screen.  It lerps the position of the pose keypoints
 between each pose estimation pass.
 
