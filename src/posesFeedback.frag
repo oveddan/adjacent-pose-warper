@@ -74,7 +74,7 @@ void main() {
     vec2 lastFrameCoord = vec2(1.-vTexcoord.x, 1.-vTexcoord.y);
     vec3 feedback = texture2D(uLastFrame, lastFrameCoord ).rgb;
 
-    color += feedback * 0.95 * vec3(1., 0., 0.);
+    color += feedback * 0.95;// * vec3(1., 0., 0.);
 
     gl_FragColor = vec4(color,1.0);
 }
