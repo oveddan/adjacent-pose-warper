@@ -27,7 +27,6 @@ async function setupCamera() : Promise<HTMLVideoElement> {
   const stream = await navigator.mediaDevices.getUserMedia({
     'audio': false,
     'video': {
-      facingMode: 'user',
       width: mobile ? undefined : videoWidth,
       height: mobile ? undefined : videoHeight,
     },
