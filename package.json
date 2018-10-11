@@ -16,6 +16,6 @@
   },
   "scripts": {
     "watch": "NODE_ENV=development parcel index.html",
-    "build": "NODE_ENV=production parcel build index.html --public-url ./"
+    "build": "NODE_ENV=production parcel build index.html --no-minify --public-url ./"
   }
 }
