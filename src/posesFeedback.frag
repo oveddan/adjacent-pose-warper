@@ -7,6 +7,7 @@ precision mediump float;
 
 uniform sampler2D uPoses;
 uniform sampler2D uLastFrame;
+uniform sampler2D uImage;
 uniform float uTime;
 varying vec2 vTexcoord;
 varying vec2 vPosition;
@@ -69,12 +70,18 @@ void main() {
     float n = snoise((vTexcoord + sin(uTime / 10.)) * 5.);
     float pose = getPoseStrength(vTexcoord + n / 100.);
 
-    vec3 color = vec3(pose);
+    vec3 imagePixels = texture2D(uImage, vTexcoord).xyz;
+
+    vec3 color = imagePixels * pose;
 
     vec2 lastFrameCoord = vec2(1.-vTexcoord.x, 1.-vTexcoord.y);
     vec3 feedback = texture2D(uLastFrame, lastFrameCoord ).rgb;
 
-    color += feedback * 0.95;// * vec3(1., 0., 0.);
+    color += step(0.01, 1.-pose) * feedback * 0.98;// * vec3(1., 0., 0.);
+
+    // color += step(0.01, 1.-pose) * imagePixels;
+
+    // color = imagePixels;
 
     gl_FragColor = vec4(color,1.0);
 }

@@ -6,6 +6,7 @@ import REGL from 'regl'
 interface PosesFeedbackUniforms {
   uPoses: REGL.Texture2D;
   uLastFrame: REGL.Texture2D;
+  uImage: REGL.Texture2D;
   uTime: number;
   screenShape: REGL.Vec2;
 }
@@ -24,6 +25,27 @@ function createOffScreenPoseCanvas(width: number, height: number): HTMLCanvasEle
 
   return posesCanvas;
 }
+
+function loadImageTexture(reglInstance: REGL.Regl, texture: REGL.Texture2D, src: string): Promise<REGL.Texture2D> {
+  return new Promise<REGL.Texture2D>((resolve, reject) => {
+    const image = new Image();
+    image.src = src
+    image.onload = function () {
+      texture({
+        wrap: "mirror",
+        min: 'linear mipmap linear',
+        mag: 'nearest',
+        data: image 
+      });
+      // imageTexture(image);
+      resolve(imageTexture);
+    }
+    image.onerror = function(e: ErrorEvent) { 
+      reject(e);
+    }
+  })
+}
+
 
 const planeAttributes: number[] = [
   -2, 0,
@@ -87,6 +109,8 @@ const posesTexture = regl.texture(offScreenPosesCanvas);
 
 const feedbackTexture = regl.texture(offScreenPosesCanvas);
 
+const imageTexture = regl.texture();
+
 const renderShader = regl<PosesFeedbackUniforms, DrawAttributes>({
   frag: require('./src/posesFeedback.frag'),
   vert: require('./src/fullPlane.vert'),
@@ -96,6 +120,7 @@ const renderShader = regl<PosesFeedbackUniforms, DrawAttributes>({
   uniforms: {
     uPoses: posesTexture,
     uLastFrame: feedbackTexture,
+    uImage: imageTexture,
     screenShape: ({viewportWidth, viewportHeight}) =>
       [viewportWidth, viewportHeight],
 
@@ -103,6 +128,7 @@ const renderShader = regl<PosesFeedbackUniforms, DrawAttributes>({
   },
   count: 3
 });
+
 
 const mobileNetArchitecture = 0.50;
 const minPoseConfidence = 0.2;
@@ -123,7 +149,10 @@ async function bindPage() {
   const startButton = getStartButton();
   const stopButton = getStopButton();
   setStatusText('loading PoseNet...');
+
   const net = await posenet.load(mobileNetArchitecture);
+
+  await loadImageTexture(regl, imageTexture, require('./images/tree.jpg'));
 
   show(document.getElementById('main'));
 
@@ -159,7 +188,7 @@ async function bindPage() {
       renderShader();
 
       feedbackTexture({
-        copy: true
+        copy: true,
       })
     });
   }
